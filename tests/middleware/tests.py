@@ -3,6 +3,7 @@ import random
 import re
 import struct
 import zlib
+from inspect import iscoroutinefunction
 from io import BytesIO
 from unittest import mock
 from urllib.parse import quote
@@ -26,12 +27,21 @@ from django.middleware.clickjacking import XFrameOptionsMiddleware
 from django.middleware.common import BrokenLinkEmailsMiddleware, CommonMiddleware
 from django.middleware.gzip import GZipMiddleware
 from django.middleware.http import ConditionalGetMiddleware
-from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.test import (
+    AsyncRequestFactory,
+    RequestFactory,
+    SimpleTestCase,
+    override_settings,
+)
 
 int2byte = struct.Struct(">B").pack
 
 
 def get_response_empty(request):
+    return HttpResponse()
+
+
+async def async_get_response_empty(request):
     return HttpResponse()
 
 
@@ -895,6 +905,95 @@ class XFrameOptionsMiddlewareTest(SimpleTestCase):
         with override_settings(X_FRAME_OPTIONS="SAMEORIGIN"):
             r = OtherXFrameOptionsMiddleware(get_response_empty)(HttpRequest())
             self.assertEqual(r.headers["X-Frame-Options"], "DENY")
+
+
+class AsyncXFrameOptionsMiddlewareTest(SimpleTestCase):
+    """
+    Async tests for the X-Frame-Options clickjacking prevention middleware.
+
+    These drive the middleware with an async ``get_response`` so the native
+    ``__acall__`` path runs without a ``sync_to_async`` thread hop.
+    """
+
+    request_factory = AsyncRequestFactory()
+
+    def test_marks_coroutine_function(self):
+        """
+        Given an async get_response, the middleware instance is marked as a
+        coroutine function so the handler runs it natively rather than adapting
+        it with sync_to_async. A sync get_response leaves it unmarked.
+        """
+        self.assertIs(
+            iscoroutinefunction(XFrameOptionsMiddleware(async_get_response_empty)),
+            True,
+        )
+        self.assertIs(
+            iscoroutinefunction(XFrameOptionsMiddleware(get_response_empty)),
+            False,
+        )
+
+    async def test_same_origin(self):
+        """
+        The X_FRAME_OPTIONS setting is honored on the async path and normalized
+        to upper case.
+        """
+        with override_settings(X_FRAME_OPTIONS="SAMEORIGIN"):
+            r = await XFrameOptionsMiddleware(async_get_response_empty)(
+                self.request_factory.get("/")
+            )
+            self.assertEqual(r.headers["X-Frame-Options"], "SAMEORIGIN")
+
+        with override_settings(X_FRAME_OPTIONS="sameorigin"):
+            r = await XFrameOptionsMiddleware(async_get_response_empty)(
+                self.request_factory.get("/")
+            )
+            self.assertEqual(r.headers["X-Frame-Options"], "SAMEORIGIN")
+
+    async def test_defaults_deny(self):
+        """
+        If the X_FRAME_OPTIONS setting is not set then it defaults to DENY on
+        the async path.
+        """
+        with override_settings(X_FRAME_OPTIONS=None):
+            del settings.X_FRAME_OPTIONS  # restored by override_settings
+            r = await XFrameOptionsMiddleware(async_get_response_empty)(
+                self.request_factory.get("/")
+            )
+            self.assertEqual(r.headers["X-Frame-Options"], "DENY")
+
+    async def test_dont_set_if_set(self):
+        """
+        If the inner async view already set X-Frame-Options, the middleware
+        leaves it alone.
+        """
+
+        async def same_origin_response(request):
+            response = HttpResponse()
+            response.headers["X-Frame-Options"] = "SAMEORIGIN"
+            return response
+
+        with override_settings(X_FRAME_OPTIONS="DENY"):
+            r = await XFrameOptionsMiddleware(same_origin_response)(
+                self.request_factory.get("/")
+            )
+            self.assertEqual(r.headers["X-Frame-Options"], "SAMEORIGIN")
+
+    async def test_response_exempt(self):
+        """
+        A response flagged with xframe_options_exempt = True does not get the
+        header set on the async path.
+        """
+
+        async def xframe_exempt_response(request):
+            response = HttpResponse()
+            response.xframe_options_exempt = True
+            return response
+
+        with override_settings(X_FRAME_OPTIONS="SAMEORIGIN"):
+            r = await XFrameOptionsMiddleware(xframe_exempt_response)(
+                self.request_factory.get("/")
+            )
+            self.assertIsNone(r.headers.get("X-Frame-Options"))
 
 
 class GZipMiddlewareTest(SimpleTestCase):
