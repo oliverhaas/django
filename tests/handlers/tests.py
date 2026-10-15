@@ -35,6 +35,18 @@ class HandlerTests(SimpleTestCase):
         # The path of the request will be encoded to '/%ED'.
         self.assertEqual(response.status_code, 404)
 
+    def test_invalid_content_type_returns_400(self):
+        environ = self.request_factory.post("/").environ
+        environ["CONTENT_TYPE"] = "text/plain; charset*=BOGUS''%20"
+        handler = WSGIHandler()
+        with self.assertLogs("django.request", "WARNING") as cm:
+            response = handler(environ, lambda *a, **k: None)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            cm.records[0].getMessage(), "Bad Request: Invalid Content-Type header."
+        )
+        self.assertEqual(cm.records[0].status_code, 400)
+
     def test_non_ascii_query_string(self):
         """
         Non-ASCII query strings are properly decoded (#20530, #22996).

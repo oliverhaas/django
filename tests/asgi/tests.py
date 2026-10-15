@@ -257,6 +257,22 @@ class ASGITest(SimpleTestCase):
             signal_handler.calls[0]["thread"], threading.current_thread()
         )
 
+    async def test_invalid_content_type_returns_400(self):
+        application = get_asgi_application()
+        scope = self.async_request_factory._base_scope(path="/", method="POST")
+        scope["headers"] = [(b"content-type", b"text/plain; charset*=BOGUS''%20")]
+        communicator = ApplicationCommunicator(application, scope)
+        await communicator.send_input({"type": "http.request"})
+        with self.assertLogs("django.request", "WARNING") as cm:
+            response_start = await communicator.receive_output()
+        self.assertEqual(response_start["type"], "http.response.start")
+        self.assertEqual(response_start["status"], 400)
+        self.assertEqual(
+            cm.records[0].getMessage(), "Bad Request: Invalid Content-Type header."
+        )
+        self.assertEqual(cm.records[0].status_code, 400)
+        await communicator.receive_output()
+
     async def test_meta_not_modified_with_repeat_headers(self):
         scope = self.async_request_factory._base_scope(path="/", http_version="2.0")
         scope["headers"] = [(b"foo", b"bar")] * 200_000

@@ -20,3 +20,7 @@ Bugfixes
   unintended, since SQL ``NULL`` cannot match any value.
 
 * Added compatibility for ``oracledb`` 26.0.0+ (:ticket:`37411`).
+
+* Fixed a regression in Django 6.1 where a request with an invalid
+  ``Content-Type`` header crashed with a server error instead of returning a
+  400 response (:ticket:`NNNNN`).
