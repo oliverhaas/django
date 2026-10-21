@@ -467,8 +467,32 @@ class RequestsTests(SimpleTestCase):
         ]
         msg = "Invalid Content-Type header."
         for header in tests:
-            with self.subTest(header=header), self.assertRaisesMessage(BadRequest, msg):
-                WSGIRequest({"REQUEST_METHOD": "GET", "CONTENT_TYPE": header})
+            with self.subTest(header=header):
+                request = WSGIRequest(
+                    {
+                        "REQUEST_METHOD": "POST",
+                        "CONTENT_TYPE": header,
+                        "wsgi.input": BytesIO(b""),
+                    }
+                )
+                with self.assertRaisesMessage(BadRequest, msg):
+                    request.POST
+                self.assertEqual(request.POST, {})
+
+    def test_invalid_charset_ignored(self):
+        for header in [
+            "text/plain; charset=bogus",
+            "text/plain; charset*=utf-8''%00",
+        ]:
+            with self.subTest(header=header):
+                request = WSGIRequest(
+                    {
+                        "REQUEST_METHOD": "GET",
+                        "CONTENT_TYPE": header,
+                        "wsgi.input": BytesIO(b""),
+                    }
+                )
+                self.assertIsNone(request.encoding)
 
     def test_malformed_multipart_header(self):
         tests = [

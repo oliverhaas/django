@@ -216,6 +216,12 @@ class HandlerRequestTests(SimpleTestCase):
         response = self.client.get("/bad_request/")
         self.assertEqual(response.status_code, 400)
 
+    def test_invalid_content_type_returns_400(self):
+        response = self.client.post(
+            "/malformed_post/", content_type="text/plain; charset*=BOGUS''%20"
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_invalid_urls(self):
         response = self.client.get("~%A9helloworld")
         self.assertEqual(response.status_code, 404)
@@ -330,6 +336,12 @@ class AsyncHandlerRequestTests(SimpleTestCase):
 
     async def test_bad_request_in_view_returns_400(self):
         response = await self.async_client.get("/bad_request/")
+        self.assertEqual(response.status_code, 400)
+
+    async def test_invalid_content_type_returns_400(self):
+        response = await self.async_client.post(
+            "/malformed_post/", content_type="text/plain; charset*=BOGUS''%20"
+        )
         self.assertEqual(response.status_code, 400)
 
     async def test_no_response(self):
