@@ -10,7 +10,7 @@ from asgiref.sync import ThreadSensitiveContext, sync_to_async
 
 from django.conf import settings
 from django.core import signals
-from django.core.exceptions import RequestAborted, RequestDataTooBig
+from django.core.exceptions import BadRequest, RequestAborted, RequestDataTooBig
 from django.core.handlers import base
 from django.http import (
     FileResponse,
@@ -23,6 +23,7 @@ from django.http import (
 )
 from django.urls import set_script_prefix
 from django.utils.functional import cached_property
+from django.utils.log import log_response
 
 logger = logging.getLogger("django.request")
 
@@ -282,6 +283,10 @@ class ASGIHandler(base.BaseHandler):
             return None, HttpResponseBadRequest()
         except RequestDataTooBig:
             return None, HttpResponse("413 Payload too large", status=413)
+        except BadRequest as exc:
+            response = HttpResponseBadRequest()
+            log_response("Bad Request: %s", str(exc), response=response, exception=exc)
+            return None, response
 
     def handle_uncaught_exception(self, request, resolver, exc_info):
         """Last-chance handler for exceptions."""

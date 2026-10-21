@@ -468,6 +468,24 @@ class ASGITest(SimpleTestCase):
         self.assertEqual(response_body["type"], "http.response.body")
         self.assertEqual(response_body["body"], b"")
 
+    async def test_invalid_content_type_returns_400(self):
+        application = get_asgi_application()
+        scope = self.async_request_factory._base_scope(path="/", method="POST")
+        scope["headers"] = [(b"content-type", b"text/plain; charset*=BOGUS''%20")]
+        communicator = ApplicationCommunicator(application, scope)
+        await communicator.send_input({"type": "http.request"})
+        with self.assertLogs("django.request", "WARNING") as cm:
+            response_start = await communicator.receive_output()
+        self.assertEqual(response_start["type"], "http.response.start")
+        self.assertEqual(response_start["status"], 400)
+        self.assertEqual(
+            cm.records[0].getMessage(), "Bad Request: Invalid Content-Type header."
+        )
+        self.assertEqual(cm.records[0].status_code, 400)
+        response_body = await communicator.receive_output()
+        self.assertEqual(response_body["type"], "http.response.body")
+        self.assertEqual(response_body["body"], b"")
+
     async def test_request_lifecycle_signals_dispatched_with_thread_sensitive(self):
         # Track request_started and request_finished signals.
         signal_handler = SignalHandler()

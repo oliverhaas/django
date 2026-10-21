@@ -2,11 +2,13 @@ from io import IOBase
 
 from django.conf import settings
 from django.core import signals
+from django.core.exceptions import BadRequest
 from django.core.handlers import base
-from django.http import HttpRequest, QueryDict, parse_cookie
+from django.http import HttpRequest, HttpResponseBadRequest, QueryDict, parse_cookie
 from django.urls import set_script_prefix
 from django.utils.encoding import repercent_broken_unicode
 from django.utils.functional import cached_property
+from django.utils.log import log_response
 from django.utils.regex_helper import _lazy_re_compile
 
 _slashes_re = _lazy_re_compile(rb"/+")
@@ -120,8 +122,13 @@ class WSGIHandler(base.BaseHandler):
     def __call__(self, environ, start_response):
         set_script_prefix(get_script_name(environ))
         signals.request_started.send(sender=self.__class__, environ=environ)
-        request = self.request_class(environ)
-        response = self.get_response(request)
+        try:
+            request = self.request_class(environ)
+        except BadRequest as exc:
+            response = HttpResponseBadRequest()
+            log_response("Bad Request: %s", str(exc), response=response, exception=exc)
+        else:
+            response = self.get_response(request)
 
         response._handler_class = self.__class__
 
