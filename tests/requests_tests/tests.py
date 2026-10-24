@@ -407,8 +407,8 @@ class RequestsTests(SimpleTestCase):
         )
         with self.assertRaisesMessage(BadRequest, msg):
             request.POST
-        with self.assertRaisesMessage(BadRequest, msg):
-            request.FILES
+        self.assertEqual(request.POST, {})
+        self.assertEqual(request.FILES, {})
 
     def test_utf8_charset_POST(self):
         for charset in ["utf-8", "UTF-8"]:

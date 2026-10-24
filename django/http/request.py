@@ -486,6 +486,7 @@ class HttpRequest:
             # content type does not have a charset and should be always treated
             # as UTF-8.
             if self._encoding is not None and self._encoding.lower() != "utf-8":
+                self._mark_post_parse_error()
                 raise BadRequest(
                     "HTTP requests with the 'application/x-www-form-urlencoded' "
                     "content type must be UTF-8 encoded."
