@@ -475,6 +475,8 @@ class RequestsTests(SimpleTestCase):
                         "wsgi.input": BytesIO(b""),
                     }
                 )
+                self.assertEqual(request.content_type, "")
+                self.assertEqual(request.content_params, {})
                 with self.assertRaisesMessage(BadRequest, msg):
                     request.POST
                 self.assertEqual(request.POST, {})

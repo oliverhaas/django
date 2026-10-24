@@ -58,7 +58,6 @@ class HttpRequest:
     _encoding = None
     _upload_handlers = []
     _multipart_parser_class = MultiPartParser
-    _invalid_content_type = False
 
     def __init__(self):
         # WARNING: The `WSGIRequest` subclass doesn't call `super`.
@@ -164,7 +163,6 @@ class HttpRequest:
             # Defer the error to _load_post_and_files(), because handlers
             # create the request before they turn exceptions into responses.
             self.content_type, self.content_params = "", {}
-            self._invalid_content_type = True
         if "charset" in self.content_params:
             try:
                 codecs.lookup(self.content_params["charset"])
@@ -462,9 +460,11 @@ class HttpRequest:
         if self._read_started and not hasattr(self, "_body"):
             self._mark_post_parse_error()
             return
-        if self._invalid_content_type:
+        try:
+            parse_header_parameters(self.META.get("CONTENT_TYPE", ""))
+        except ValueError as exc:
             self._mark_post_parse_error()
-            raise BadRequest("Invalid Content-Type header.")
+            raise BadRequest("Invalid Content-Type header.") from exc
 
         if self.content_type == "multipart/form-data":
             if hasattr(self, "_body"):
