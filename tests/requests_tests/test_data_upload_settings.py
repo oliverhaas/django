@@ -146,6 +146,19 @@ class DataUploadMaxNumberOfFieldsGet(SimpleTestCase):
                 )
                 request.GET["a"]
 
+    def test_get_max_fields_exceeded_with_charset(self):
+        with self.settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=1):
+            request = WSGIRequest(
+                {
+                    "REQUEST_METHOD": "GET",
+                    "wsgi.input": BytesIO(b""),
+                    "QUERY_STRING": "a=1&a=2&a=3",
+                    "CONTENT_TYPE": "text/plain; charset=utf-8",
+                }
+            )
+            with self.assertRaisesMessage(TooManyFieldsSent, TOO_MANY_FIELDS_MSG):
+                request.GET["a"]
+
     def test_get_max_fields_not_exceeded(self):
         with self.settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=3):
             request = WSGIRequest(

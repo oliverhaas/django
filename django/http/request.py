@@ -343,7 +343,7 @@ class HttpRequest:
         next access (so that it is decoded correctly).
         """
         self._encoding = val
-        if hasattr(self, "GET"):
+        if "GET" in self.__dict__:
             del self.GET
         if hasattr(self, "_post"):
             del self._post
